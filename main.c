@@ -183,7 +183,7 @@ int main() {
     do {
         print_menu();
 
-        if (!read_int(&choice)) { // защита от дурака
+        if (!read_int(&choice)) {
             continue;
         }
 

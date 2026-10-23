@@ -177,7 +177,7 @@ void ask_name(void) {
 
 
 void print_menu(void) {
-    printf("\n--- МЕНЮ: %s ---\n", farmer_name);
+    printf("\n=== МЕНЮ: %s ===\n", farmer_name);
     printf("0) Выход\n");
     printf("1) Часы\n");
     printf("2) Поработать\n");

@@ -53,6 +53,7 @@ int hero_x = 0;
 int hero_y = 0;
 int alloc_count = 0;
 int tower_level = 0;
+int steps_count = 0;
 
 
 int  read_int(int *out);
@@ -377,6 +378,7 @@ void adventure(void) {
     int result;
 
     tower_level = 1;
+    steps_count = 0;
     if (!generate_tower()) return;
 
     printf("\n%s входит в Зеркальную башню!\n", farmer_name);
@@ -386,7 +388,7 @@ void adventure(void) {
         print_map();
         dir = read_direction();
         if (dir == 'Q') {
-            printf("%s сбежал домой.\n", farmer_name);
+            printf("%s сбежал домой. Шагов сделано: %d\n", farmer_name, steps_count);
             break;
         }
         result = move_hero(dir);
@@ -661,6 +663,7 @@ int move_hero(char dir) {
 
     hero_x = nx;
     hero_y = ny;
+    steps_count++;
 
     if (map[ny][nx] == CELL_SWITCH) {
         printf("Щёлк! Вы нажали переключатель - стена посередине исчезла!\n");

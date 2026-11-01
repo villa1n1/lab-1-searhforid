@@ -123,7 +123,8 @@ int main(void) {
 int read_int(int *out) {
     char buf[INPUT_SIZE];
     if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
-    if (sscanf(buf, "%d", out) != 1) {
+    char rest;
+    if (sscanf(buf, "%d %c", out, &rest) != 1) {
         printf("Это не число!\n");
         return 0;
     }

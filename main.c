@@ -7,6 +7,11 @@
 #define INV_SIZE     10
 #define MAX_ITEMS    10
 #define MAX_NAME     64
+#define NAME_BUF     33
+#define INPUT_SIZE   100
+#define LINE_SIZE    200
+#define MAX_PRICES   64
+#define MAX_ITEM_ID  9
 
 #define MAP_MIN      5
 #define MAP_MAX      30
@@ -30,7 +35,7 @@ int current_day  = 1;
 int current_hour = 8;
 int inventory[INV_SIZE] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-char farmer_name[33] = "Фермер";
+char farmer_name[NAME_BUF] = "Фермер";
 
 char item_names[MAX_ITEMS][MAX_NAME] = {
     "Пусто", "Дерево", "Камень", "Семена",
@@ -116,7 +121,7 @@ int main(void) {
 
 
 int read_int(int *out) {
-    char buf[100];
+    char buf[INPUT_SIZE];
     if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
     if (sscanf(buf, "%d", out) != 1) {
         printf("Это не число!\n");
@@ -136,7 +141,7 @@ void read_line(char *out, int size) {
 
 void load_items(void) {
     FILE *f;
-    char line[100];
+    char line[INPUT_SIZE];
     char *p;
     size_t len;
     int i;
@@ -163,12 +168,12 @@ void load_items(void) {
 
 
 void ask_name(void) {
-    char buf[100];
+    char buf[INPUT_SIZE];
     printf("Введите имя фермера: ");
     read_line(buf, sizeof(buf));
     if (strlen(buf) > 0) {
-        strncpy(farmer_name, buf, 32);
-        farmer_name[32] = '\0';
+        strncpy(farmer_name, buf, NAME_BUF - 1);
+        farmer_name[NAME_BUF - 1] = '\0';
     }
 }
 
@@ -212,19 +217,19 @@ void show_inventory(void) {
 
 void put_item(void) {
     int idx, id;
-    printf("Индекс слота (0-9): ");
+    printf("Индекс слота (0-%d): ", INV_SIZE - 1);
     if (!read_int(&idx)) return;
     if (idx < 0 || idx >= INV_SIZE) { printf("Неверный слот!\n"); return; }
-    printf("ID предмета (0-9): ");
+    printf("ID предмета (0-%d): ", MAX_ITEM_ID);
     if (!read_int(&id)) return;
-    if (id < 0 || id > 9) { printf("Неверный ID!\n"); return; }
+    if (id < 0 || id > MAX_ITEM_ID) { printf("Неверный ID!\n"); return; }
     inventory[idx] = id;
     printf("В слот %d положен [%d] %s.\n", idx, id, item_names[id]);
 }
 
 void drop_item(void) {
     int idx;
-    printf("Индекс слота (0-9): ");
+    printf("Индекс слота (0-%d): ", INV_SIZE - 1);
     if (!read_int(&idx)) return;
     if (idx < 0 || idx >= INV_SIZE) { printf("Неверный слот!\n"); return; }
     inventory[idx] = 0;
@@ -234,9 +239,9 @@ void drop_item(void) {
 void varik(void) {
     int id, found, i, t;
 
-    printf("ID предмета (0-9): ");
+    printf("ID предмета (0-%d): ", MAX_ITEM_ID);
     if (!read_int(&id)) return;
-    if (id <= 0 || id > 9) { printf("Неверный ID!\n"); return; }
+    if (id <= 0 || id > MAX_ITEM_ID) { printf("Неверный ID!\n"); return; }
 
     found = -1;
     for (i = 0; i < INV_SIZE; i++)
@@ -289,10 +294,10 @@ void write_diary(void) {
 
 
 void decode_records(void) {
-    char pname[64][64];
-    int  pprice[64];
+    char pname[MAX_PRICES][MAX_NAME];
+    int  pprice[MAX_PRICES];
     int  count, i, j, price, total, best, best_slot;
-    char line[200];
+    char line[LINE_SIZE];
     char *sp;
     char *nm;
     size_t len;
@@ -303,7 +308,7 @@ void decode_records(void) {
     in = fopen("input.txt", "r");
     if (!in) { printf("input.txt не найден.\n"); return; }
 
-    while (fgets(line, sizeof(line), in) && count < 64) {
+    while (fgets(line, sizeof(line), in) && count < MAX_PRICES) {
         len = strlen(line);
         if (len > 0 && line[len - 1] == '\n') line[len - 1] = '\0';
         if (len == 0) continue;
@@ -311,8 +316,8 @@ void decode_records(void) {
         sp = strrchr(line, ' ');
         if (!sp) continue;
         *sp = '\0';
-        strncpy(pname[count], line, 63);
-        pname[count][63] = '\0';
+        strncpy(pname[count], line, MAX_NAME - 1);
+        pname[count][MAX_NAME - 1] = '\0';
         pprice[count] = atoi(sp + 1);
         count++;
     }
@@ -595,7 +600,7 @@ void print_map(void) {
 
 
 char read_direction(void) {
-    char buf[100];
+    char buf[INPUT_SIZE];
     char c;
 
     while (1) {

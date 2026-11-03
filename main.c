@@ -23,12 +23,11 @@
 #define CELL_FLOOR   '.'
 #define CELL_TREE    'T'
 #define CELL_ROCK    'R'
-#define CELL_SWITCH  '*'
+#define CELL_LEVER   'L'
+#define CELL_MIRROR  'M'
 #define CELL_EXIT    'E'
 #define CELL_HERO    '@'
 
-#define SPLIT_VERTICAL   0
-#define SPLIT_HORIZONTAL 1
 
 
 int current_day  = 1;
@@ -47,8 +46,7 @@ char **map = NULL;
 int map_w = 0;
 int map_h = 0;
 int map_mid = 0;
-int map_split = SPLIT_VERTICAL;
-int wall_open = 0;
+int room_open = 0;
 int hero_x = 0;
 int hero_y = 0;
 int alloc_count = 0;
@@ -75,17 +73,15 @@ void adventure(void);
 int  create_map(int w, int h);
 void free_map(void);
 int  random_range(int a, int b);
-int  in_first_half(int x, int y);
-void mirror_cell(int x, int y, int *mx, int *my);
-void random_first_half_cell(int *x, int *y);
 void fill_map(void);
 void carve_path(int x1, int y1, int x2, int y2);
 void mirror_map(void);
 int  generate_tower(void);
+char cell_to_draw(int x, int y);
 void print_map(void);
 char read_direction(void);
 int  is_passable(int x, int y);
-void open_middle_wall(void);
+void open_mirror(void);
 int  move_hero(char dir);
 
 
@@ -382,7 +378,7 @@ void adventure(void) {
     if (!generate_tower()) return;
 
     printf("\n%s входит в Зеркальную башню!\n", farmer_name);
-    printf("Найдите переключатель (%c), чтобы убрать стену посередине.\n", CELL_SWITCH);
+    printf("Вторая половина комнаты отражается в зеркале (%c) и закрыта. Дойдите до рычага (%c), чтобы открыть проход.\n", CELL_MIRROR, CELL_LEVER);
 
     while (1) {
         print_map();
@@ -461,35 +457,6 @@ int random_range(int a, int b) {
 }
 
 
-int in_first_half(int x, int y) {
-    if (x <= 0 || y <= 0 || x >= map_w - 1 || y >= map_h - 1) return 0;
-    if (map_split == SPLIT_VERTICAL) return x < map_mid;
-    return y < map_mid;
-}
-
-
-void mirror_cell(int x, int y, int *mx, int *my) {
-    if (map_split == SPLIT_VERTICAL) {
-        *mx = map_w - 1 - x;
-        *my = y;
-    } else {
-        *mx = x;
-        *my = map_h - 1 - y;
-    }
-}
-
-
-void random_first_half_cell(int *x, int *y) {
-    if (map_split == SPLIT_VERTICAL) {
-        *x = random_range(1, map_mid - 1);
-        *y = random_range(1, map_h - 2);
-    } else {
-        *x = random_range(1, map_w - 2);
-        *y = random_range(1, map_mid - 1);
-    }
-}
-
-
 void fill_map(void) {
     int x, y, chance;
 
@@ -499,10 +466,9 @@ void fill_map(void) {
         for (x = 0; x < map_w; x++) {
             if (x == 0 || y == 0 || x == map_w - 1 || y == map_h - 1) {
                 map[y][x] = CELL_WALL;
-            } else if ((map_split == SPLIT_VERTICAL && x == map_mid) ||
-                       (map_split == SPLIT_HORIZONTAL && y == map_mid)) {
-                map[y][x] = CELL_WALL;
-            } else if (in_first_half(x, y) && rand() % PERCENT < chance) {
+            } else if (x == map_mid) {
+                map[y][x] = CELL_MIRROR;
+            } else if (x < map_mid && rand() % PERCENT < chance) {
                 if (rand() % 2 == 0) map[y][x] = CELL_TREE;
                 else map[y][x] = CELL_ROCK;
             } else {
@@ -532,14 +498,11 @@ void carve_path(int x1, int y1, int x2, int y2) {
 
 
 void mirror_map(void) {
-    int x, y, mx, my;
+    int x, y;
 
     for (y = 1; y < map_h - 1; y++) {
-        for (x = 1; x < map_w - 1; x++) {
-            if (in_first_half(x, y)) {
-                mirror_cell(x, y, &mx, &my);
-                map[my][mx] = map[y][x];
-            }
+        for (x = 1; x < map_mid; x++) {
+            map[y][map_w - 1 - x] = map[y][x];
         }
     }
 }
@@ -547,41 +510,49 @@ void mirror_map(void) {
 
 int generate_tower(void) {
     int w, h;
-    int sx, sy, ex, ey;
+    int lever_x, lever_y;
 
-    map_split = rand() % 2;
     w = random_range(MAP_MIN, MAP_MAX);
     h = random_range(MAP_MIN, MAP_MAX);
-
-    if (map_split == SPLIT_VERTICAL && w % 2 == 0) w--;
-    if (map_split == SPLIT_HORIZONTAL && h % 2 == 0) h--;
+    if (w % 2 == 0) w--;
 
     if (!create_map(w, h)) return 0;
 
-    if (map_split == SPLIT_VERTICAL) map_mid = w / 2;
-    else map_mid = h / 2;
-
-    wall_open = 0;
+    map_mid = w / 2;
+    room_open = 0;
     fill_map();
 
-    random_first_half_cell(&hero_x, &hero_y);
+    hero_x = random_range(1, map_mid - 1);
+    hero_y = random_range(1, map_h - 2);
 
     do {
-        random_first_half_cell(&sx, &sy);
-    } while (sx == hero_x && sy == hero_y);
+        lever_x = random_range(1, map_mid - 1);
+        lever_y = random_range(1, map_h - 2);
+    } while (lever_x == hero_x && lever_y == hero_y);
 
-    carve_path(hero_x, hero_y, sx, sy);
-    if (map_split == SPLIT_VERTICAL) carve_path(sx, sy, map_mid - 1, sy);
-    else carve_path(sx, sy, sx, map_mid - 1);
+    carve_path(hero_x, hero_y, lever_x, lever_y);
+    carve_path(lever_x, lever_y, map_mid - 1, lever_y);
 
     mirror_map();
 
-    map[sy][sx] = CELL_SWITCH;
-    mirror_cell(hero_x, hero_y, &ex, &ey);
-    map[ey][ex] = CELL_EXIT;
+    map[lever_y][lever_x] = CELL_LEVER;
+    map[hero_y][map_w - 1 - hero_x] = CELL_EXIT;
 
     printf("\n[Выделена память под карту %dx%d, блоков: %d]\n", map_w, map_h, alloc_count);
     return 1;
+}
+
+
+char cell_to_draw(int x, int y) {
+    int mirror_x;
+
+    if (x == hero_x && y == hero_y) return CELL_HERO;
+    if (!room_open && x > map_mid) {
+        mirror_x = map_w - 1 - x;
+        if (mirror_x == hero_x && y == hero_y) return CELL_HERO;
+        if (map[y][mirror_x] == CELL_LEVER) return CELL_LEVER;
+    }
+    return map[y][x];
 }
 
 
@@ -590,15 +561,13 @@ void print_map(void) {
 
     printf("\n=== Зеркальная башня, этаж %d (%dx%d) ===\n", tower_level, map_w, map_h);
     for (y = 0; y < map_h; y++) {
-        for (x = 0; x < map_w; x++) {
-            if (x == hero_x && y == hero_y) printf("%c", CELL_HERO);
-            else printf("%c", map[y][x]);
-        }
+        for (x = 0; x < map_w; x++) printf("%c", cell_to_draw(x, y));
         printf("\n");
     }
-    printf("%c-герой %c-стена %c-дерево %c-камень %c-переключатель %c-выход\n",
-           CELL_HERO, CELL_WALL, CELL_TREE, CELL_ROCK, CELL_SWITCH, CELL_EXIT);
-    if (wall_open) printf("Стена открыта! Идите к выходу.\n");
+    printf("%c-герой %c-стена %c-зеркало %c-дерево %c-камень %c-рычаг %c-выход\n",
+           CELL_HERO, CELL_WALL, CELL_MIRROR, CELL_TREE, CELL_ROCK, CELL_LEVER, CELL_EXIT);
+    if (!room_open) printf("За зеркалом - отражение героя и рычага.\n");
+    else printf("Зеркало исчезло! Идите к выходу.\n");
 }
 
 
@@ -626,20 +595,16 @@ int is_passable(int x, int y) {
 
     if (x < 0 || y < 0 || x >= map_w || y >= map_h) return 0;
     c = map[y][x];
-    if (c == CELL_FLOOR || c == CELL_SWITCH || c == CELL_EXIT) return 1;
+    if (c == CELL_FLOOR || c == CELL_LEVER || c == CELL_EXIT) return 1;
     return 0;
 }
 
 
-void open_middle_wall(void) {
-    int i;
+void open_mirror(void) {
+    int y;
 
-    if (map_split == SPLIT_VERTICAL) {
-        for (i = 1; i < map_h - 1; i++) map[i][map_mid] = CELL_FLOOR;
-    } else {
-        for (i = 1; i < map_w - 1; i++) map[map_mid][i] = CELL_FLOOR;
-    }
-    wall_open = 1;
+    for (y = 1; y < map_h - 1; y++) map[y][map_mid] = CELL_FLOOR;
+    room_open = 1;
 }
 
 
@@ -652,12 +617,12 @@ int move_hero(char dir) {
     else if (dir == 'A') nx--;
     else if (dir == 'D') nx++;
 
-    if (!is_passable(nx, ny)) {
-        printf("Туда нельзя, там препятствие!\n");
+    if (map[ny][nx] == CELL_MIRROR) {
+        printf("Это зеркало, сквозь него не пройти. Найдите рычаг!\n");
         return 0;
     }
-    if (!wall_open && !in_first_half(nx, ny)) {
-        printf("Нельзя уйти со своей половины!\n");
+    if (!is_passable(nx, ny)) {
+        printf("Туда нельзя, там препятствие!\n");
         return 0;
     }
 
@@ -665,10 +630,10 @@ int move_hero(char dir) {
     hero_y = ny;
     steps_count++;
 
-    if (map[ny][nx] == CELL_SWITCH) {
-        printf("Щёлк! Вы нажали переключатель - стена посередине исчезла!\n");
+    if (map[ny][nx] == CELL_LEVER) {
+        printf("Щёлк! Вы дёрнули рычаг - зеркало исчезло, проход во вторую половину открыт!\n");
         map[ny][nx] = CELL_FLOOR;
-        open_middle_wall();
+        open_mirror();
     } else if (map[ny][nx] == CELL_EXIT) {
         return 1;
     }

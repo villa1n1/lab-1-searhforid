@@ -4,11 +4,21 @@
 #include "utils.h"
 
 
+static void discard_rest_of_line(const char *buf) {
+    int c;
+
+    if (strchr(buf, '\n') != NULL) return;
+    while ((c = getchar()) != '\n' && c != EOF) {
+    }
+}
+
+
 int read_int(int *out) {
     char buf[INPUT_SIZE];
     char rest;
 
     if (fgets(buf, sizeof(buf), stdin) == NULL) return INPUT_EOF;
+    discard_rest_of_line(buf);
     if (sscanf(buf, "%d %c", out, &rest) != 1) {
         printf("Это не число!\n");
         return INPUT_BAD;
@@ -38,6 +48,7 @@ int read_line(char *out, int size) {
         out[0] = '\0';
         return 0;
     }
+    discard_rest_of_line(out);
     len = strlen(out);
     if (len > 0 && out[len - 1] == '\n') out[len - 1] = '\0';
     return 1;

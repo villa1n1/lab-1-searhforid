@@ -4,6 +4,42 @@
 #include "player.h"
 
 
+static void clear_slot(struct Player *p, int slot) {
+    p->equipment[slot].name[0] = '\0';
+    p->equipment[slot].slot = (enum SlotType)slot;
+    p->equipment[slot].bonus_hp = 0;
+    p->equipment[slot].bonus_stamina = 0;
+}
+
+
+static const char *slot_title(enum SlotType slot) {
+    switch (slot) {
+        case SLOT_HEAD:  return "Голова";
+        case SLOT_BODY:  return "Тело";
+        case SLOT_BOOTS: return "Обувь";
+        default:         return "?";
+    }
+}
+
+
+static void print_equipment_line(const struct Equipment *e) {
+    printf("%s +%d HP, +%d выносливости", e->name, e->bonus_hp, e->bonus_stamina);
+}
+
+
+static void print_slots(const struct Player *p) {
+    int i;
+
+    printf("Снаряжение:\n");
+    for (i = 0; i < SLOT_COUNT; i++) {
+        printf("  %d) %-7s: ", i + 1, slot_title((enum SlotType)i));
+        if (p->equipment[i].name[0] == '\0') printf("(пусто)");
+        else print_equipment_line(&p->equipment[i]);
+        printf("\n");
+    }
+}
+
+
 static int ask_player_name(char *out) {
     char buf[INPUT_SIZE];
 
@@ -49,6 +85,7 @@ struct Player *player_create(void) {
     p->x = 0;
     p->y = 0;
     for (i = 0; i < INV_SIZE; i++) p->inventory[i] = i;
+    for (i = 0; i < SLOT_COUNT; i++) clear_slot(p, i);
 
     printf("Персонаж создан по адресу %p.\n", (void*)p);
     return p;
@@ -71,6 +108,7 @@ void player_print_card(const struct Player *p, const struct GameTime *t, char na
     printf("Выносливость: %d/%d\n", p->stamina, p->max_stamina);
     printf("Золото: %d\n", p->gold);
     time_show(t);
+    print_slots(p);
     inventory_show(p, names);
 }
 
@@ -93,6 +131,96 @@ void player_rest(struct Player *p, struct GameTime *t) {
 void player_spend_stamina(struct Player *p, int amount) {
     p->stamina -= amount;
     if (p->stamina < 0) p->stamina = 0;
+}
+
+
+void player_recalc_stats(struct Player *p) {
+    int i;
+
+    p->max_hp = p->base_max_hp;
+    p->max_stamina = p->base_max_stamina;
+    for (i = 0; i < SLOT_COUNT; i++) {
+        p->max_hp += p->equipment[i].bonus_hp;
+        p->max_stamina += p->equipment[i].bonus_stamina;
+    }
+    if (p->hp > p->max_hp) p->hp = p->max_hp;
+    if (p->stamina > p->max_stamina) p->stamina = p->max_stamina;
+}
+
+
+static void set_equipment(struct Equipment *e, const char *name, enum SlotType slot, int bonus_hp, int bonus_stamina) {
+    strncpy(e->name, name, MAX_NAME - 1);
+    e->name[MAX_NAME - 1] = '\0';
+    e->slot = slot;
+    e->bonus_hp = bonus_hp;
+    e->bonus_stamina = bonus_stamina;
+}
+
+
+void equipment_fill_catalog(struct Equipment catalog[]) {
+    set_equipment(&catalog[0], "Кожаная шапка", SLOT_HEAD, 5, 0);
+    set_equipment(&catalog[1], "Железный шлем", SLOT_HEAD, 15, 0);
+    set_equipment(&catalog[2], "Холщовая куртка", SLOT_BODY, 10, 5);
+    set_equipment(&catalog[3], "Кольчуга", SLOT_BODY, 30, 0);
+    set_equipment(&catalog[4], "Лёгкие сапоги", SLOT_BOOTS, 0, 10);
+    set_equipment(&catalog[5], "Сапоги-скороходы", SLOT_BOOTS, 5, 25);
+}
+
+
+static void equip_item(struct Player *p, const struct Equipment catalog[]) {
+    int i, choice;
+    char prompt[INPUT_SIZE];
+
+    printf("Доступное снаряжение:\n");
+    for (i = 0; i < EQUIP_CATALOG_SIZE; i++) {
+        printf("  %d) [%s] ", i + 1, slot_title(catalog[i].slot));
+        print_equipment_line(&catalog[i]);
+        printf("\n");
+    }
+    sprintf(prompt, "Что надеть (1-%d)? ", EQUIP_CATALOG_SIZE);
+    if (read_int_range(prompt, 1, EQUIP_CATALOG_SIZE, &choice) != INPUT_OK) return;
+
+    p->equipment[catalog[choice - 1].slot] = catalog[choice - 1];
+    player_recalc_stats(p);
+    printf("Надето: %s. Макс. здоровье: %d, макс. выносливость: %d.\n",
+           catalog[choice - 1].name, p->max_hp, p->max_stamina);
+}
+
+
+static void unequip_item(struct Player *p) {
+    int choice;
+    char prompt[INPUT_SIZE];
+
+    sprintf(prompt, "Какой слот освободить (1-%d)? ", SLOT_COUNT);
+    if (read_int_range(prompt, 1, SLOT_COUNT, &choice) != INPUT_OK) return;
+
+    if (p->equipment[choice - 1].name[0] == '\0') {
+        printf("Этот слот и так пуст.\n");
+        return;
+    }
+    printf("Снято: %s.\n", p->equipment[choice - 1].name);
+    clear_slot(p, choice - 1);
+    player_recalc_stats(p);
+    printf("Макс. здоровье: %d, макс. выносливость: %d.\n", p->max_hp, p->max_stamina);
+}
+
+
+void equipment_menu(struct Player *p, const struct Equipment catalog[]) {
+    int choice, status;
+
+    while (1) {
+        printf("\n===== Управление снаряжением =====\n");
+        print_slots(p);
+        printf("Здоровье: %d/%d, выносливость: %d/%d\n", p->hp, p->max_hp, p->stamina, p->max_stamina);
+        printf("1) Надеть вещь\n2) Снять вещь\n0) Назад\nВыбор: ");
+        status = read_int(&choice);
+        if (status == INPUT_EOF) return;
+        if (status != INPUT_OK) continue;
+        if (choice == 0) return;
+        if (choice == 1) equip_item(p, catalog);
+        else if (choice == 2) unequip_item(p);
+        else printf("Нет такого пункта.\n");
+    }
 }
 
 

@@ -1,641 +1,219 @@
 #include <stdio.h>
-#include <string.h>
-#include <windows.h>
 #include <stdlib.h>
 #include <time.h>
+#include <windows.h>
+#include "utils.h"
+#include "player.h"
+#include "adventure.h"
 
-#define INV_SIZE     10
-#define MAX_ITEMS    10
-#define MAX_NAME     64
-#define NAME_BUF     33
-#define INPUT_SIZE   100
-#define LINE_SIZE    200
-#define MAX_PRICES   64
-#define MAX_ITEM_ID  9
-
-#define MAP_MIN      5
-#define MAP_MAX      30
-#define OBST_MIN     15
-#define OBST_MAX     30
-#define PERCENT      100
-
-#define CELL_WALL    '#'
-#define CELL_FLOOR   '.'
-#define CELL_TREE    'T'
-#define CELL_ROCK    'R'
-#define CELL_LEVER   'L'
-#define CELL_MIRROR  'M'
-#define CELL_EXIT    'E'
-#define CELL_HERO    '@'
-
-
-
-int current_day  = 1;
-int current_hour = 8;
-int inventory[INV_SIZE] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-char farmer_name[NAME_BUF] = "Фермер";
-
-char item_names[MAX_ITEMS][MAX_NAME] = {
-    "Пусто", "Дерево", "Камень", "Семена",
-    "Железо", "Золото", "Зелье", "Факел",
-    "Верёвка", "Хлеб"
+enum MenuItem {
+    MENU_EXIT = 0,
+    MENU_CREATE,
+    MENU_CARD,
+    MENU_TIME,
+    MENU_INVENTORY,
+    MENU_PUT,
+    MENU_DROP,
+    MENU_QUICK,
+    MENU_FIND,
+    MENU_DIARY,
+    MENU_ADVENTURE,
+    MENU_PRICES,
+    MENU_EQUIPMENT
 };
 
-char **map = NULL;
-int map_w = 0;
-int map_h = 0;
-int map_mid = 0;
-int room_open = 0;
-int hero_x = 0;
-int hero_y = 0;
-int alloc_count = 0;
-int tower_level = 0;
-int steps_count = 0;
+enum TimeMenuItem {
+    TIME_BACK = 0,
+    TIME_CLOCK,
+    TIME_WAIT,
+    TIME_SLEEP
+};
+
+struct Game {
+    struct GameTime time;
+    struct Player *player;
+    char item_names[MAX_ITEMS][MAX_NAME];
+    struct Equipment catalog[EQUIP_CATALOG_SIZE];
+};
 
 
-int  read_int(int *out);
-void read_line(char *out, int size);
-void load_items(void);
-void ask_name(void);
-void print_menu(void);
-void show_clock(void);
-void pass_time(void);
-void show_inventory(void);
-void put_item(void);
-void drop_item(void);
-void varik(void);
-void find_by_name(void);
-void write_diary(void);
-void decode_records(void);
-
-void adventure(void);
-int  create_map(int w, int h);
-void free_map(void);
-int  random_range(int a, int b);
-void fill_map(void);
-void carve_path(int x1, int y1, int x2, int y2);
-void mirror_map(void);
-int  generate_tower(void);
-char cell_to_draw(int x, int y);
-void print_map(void);
-char read_direction(void);
-int  is_passable(int x, int y);
-void open_mirror(void);
-int  move_hero(char dir);
-
-
-int main(void) {
-    SetConsoleOutputCP(65001);
-    SetConsoleCP(65001);
-    srand((unsigned)time(NULL));
-
-    int choice;
-
-    load_items();
-    ask_name();
-
-    do {
-        print_menu();
-        if (!read_int(&choice)) continue;
-        switch (choice) {
-            case 0: printf("Пока, %s!\n", farmer_name); break;
-            case 1: show_clock(); break;
-            case 2: pass_time(); break;
-            case 3: show_inventory(); break;
-            case 4: put_item(); break;
-            case 5: drop_item(); break;
-            case 6: varik(); break;
-            case 7: find_by_name(); break;
-            case 8: write_diary(); break;
-            case 9: decode_records(); break;
-            case 10: adventure(); break;
-            default: printf("Нет такой команды.\n"); break;
-        }
-    } while (choice != 0);
-    return 0;
+static void game_init(struct Game *game) {
+    time_init(&game->time);
+    game->player = NULL;
+    equipment_fill_catalog(game->catalog);
+    load_item_names(game->item_names);
 }
 
 
-int read_int(int *out) {
-    char buf[INPUT_SIZE];
-    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
-    char rest;
-    if (sscanf(buf, "%d %c", out, &rest) != 1) {
-        printf("Это не число!\n");
-        return 0;
-    }
-    return 1;
+static void game_cleanup(struct Game *game) {
+    player_free(&game->player);
 }
 
 
-void read_line(char *out, int size) {
-    size_t len;
-    if (fgets(out, size, stdin) == NULL) { out[0] = '\0'; return; }
-    len = strlen(out);
-    if (len > 0 && out[len - 1] == '\n') out[len - 1] = '\0';
-}
-
-
-void load_items(void) {
-    FILE *f;
-    char line[INPUT_SIZE];
-    char *p;
-    size_t len;
-    int i;
-
-    f = fopen("data/items.txt", "r");
-    if (!f) {
-        printf("items.txt не найден — используются базовые названия.\n");
-        return;
-    }
-    i = 0;
-    while (i < MAX_ITEMS && fgets(line, sizeof(line), f)) {
-        p = strchr(line, ' ');
-        if (!p) continue;
-        p++;
-        len = strlen(p);
-        if (len > 0 && p[len - 1] == '\n') p[len - 1] = '\0';
-        strncpy(item_names[i], p, MAX_NAME - 1);
-        item_names[i][MAX_NAME - 1] = '\0';
-        i++;
-    }
-    fclose(f);
-    printf("Каталог загружен из items.txt.\n");
-}
-
-
-void ask_name(void) {
-    char buf[INPUT_SIZE];
-    printf("Введите имя фермера: ");
-    read_line(buf, sizeof(buf));
-    if (strlen(buf) > 0) {
-        strncpy(farmer_name, buf, NAME_BUF - 1);
-        farmer_name[NAME_BUF - 1] = '\0';
-    }
-}
-
-
-void print_menu(void) {
-    printf("\n=== МЕНЮ: %s ===\n", farmer_name);
+static void print_menu(const struct Game *game) {
+    if (game->player != NULL) printf("\n=== МЕНЮ: %s ===\n", game->player->name);
+    else printf("\n=== МЕНЮ: персонаж не создан ===\n");
     printf("0) Выход\n");
-    printf("1) Часы\n");
-    printf("2) Поработать\n");
-    printf("3) Инвентарь\n");
-    printf("4) Положить предмет\n");
-    printf("5) Выбросить предмет\n");
-    printf("6) Быстрый доступ\n");
-    printf("7) Поиск по названию\n");
-    printf("8) Записать в дневник\n");
-    printf("9) Оценка у скупщика\n");
+    printf("1) Создать / пересоздать персонажа\n");
+    printf("2) Карточка персонажа\n");
+    printf("3) Время (часы, ждать, спать)\n");
+    printf("4) Инвентарь\n");
+    printf("5) Положить предмет\n");
+    printf("6) Выбросить предмет\n");
+    printf("7) Быстрый доступ\n");
+    printf("8) Поиск по названию\n");
+    printf("9) Записать в дневник\n");
     printf("10) Отправиться в приключение (Башня)\n");
+    printf("11) Оценка у скупщика\n");
+    printf("12) Управление снаряжением\n");
     printf("Выбор: ");
 }
 
 
-void show_clock(void) {
-    printf("День %d, %02d:00\n", current_day, current_hour);
-}
-
-void pass_time(void) {
-    int h;
-    printf("Сколько часов работать? ");
-    if (!read_int(&h)) return;
-    if (h < 0 || h > 100) { printf("Недопустимое кол-во часов.\n"); return; }
-    current_hour += h;
-    while (current_hour >= 24) { current_hour -= 24; current_day++; }
-    show_clock();
-}
-
-void show_inventory(void) {
-    int i;
-    for (i = 0; i < INV_SIZE; i++)
-        printf("Слот %d: [%d] - %s\n", i, inventory[i], item_names[inventory[i]]);
-}
-
-void put_item(void) {
-    int idx, id;
-    printf("Индекс слота (0-%d): ", INV_SIZE - 1);
-    if (!read_int(&idx)) return;
-    if (idx < 0 || idx >= INV_SIZE) { printf("Неверный слот!\n"); return; }
-    printf("ID предмета (0-%d): ", MAX_ITEM_ID);
-    if (!read_int(&id)) return;
-    if (id < 0 || id > MAX_ITEM_ID) { printf("Неверный ID!\n"); return; }
-    inventory[idx] = id;
-    printf("В слот %d положен [%d] %s.\n", idx, id, item_names[id]);
-}
-
-void drop_item(void) {
-    int idx;
-    printf("Индекс слота (0-%d): ", INV_SIZE - 1);
-    if (!read_int(&idx)) return;
-    if (idx < 0 || idx >= INV_SIZE) { printf("Неверный слот!\n"); return; }
-    inventory[idx] = 0;
-    printf("Слот %d очищен.\n", idx);
-}
-
-void varik(void) {
-    int id, found, i, t;
-
-    printf("ID предмета (0-%d): ", MAX_ITEM_ID);
-    if (!read_int(&id)) return;
-    if (id <= 0 || id > MAX_ITEM_ID) { printf("Неверный ID!\n"); return; }
-
-    found = -1;
-    for (i = 0; i < INV_SIZE; i++)
-        if (inventory[i] == id) { found = i; break; }
-
-    if (found == -1) { printf("Такого предмета нет.\n"); return; }
-    if (found == 0)  { printf("Уже в слоте 0.\n"); return; }
-
-    t = inventory[0];
-    inventory[0] = inventory[found];
-    inventory[found] = t;
-    printf("Обменян со слотом %d.\n", found);
-    show_inventory();
-}
-
-void find_by_name(void) {
-    char query[MAX_NAME];
-    int id, any, i;
-
-    printf("Название предмета: ");
-    read_line(query, sizeof(query));
-
-    id = -1;
-    for (i = 0; i < MAX_ITEMS; i++)
-        if (strcmp(item_names[i], query) == 0) { id = i; break; }
-
-    if (id <= 0) { printf("Такого предмета в каталоге нет.\n"); return; }
-
-    printf("«%s» лежит в слотах: ", query);
-    any = 0;
-    for (i = 0; i < INV_SIZE; i++)
-        if (inventory[i] == id) { printf("%d ", i); any = 1; }
-    if (!any) printf("(нет)");
-    printf("\n");
-}
-
-void write_diary(void) {
-    FILE *f;
-    int i;
-
-    f = fopen("data/diary.txt", "a");
-    if (!f) { printf("Не удалось открыть diary.txt.\n"); return; }
-    fprintf(f, "Фермер: %s | День %d, %02d:00\n", farmer_name, current_day, current_hour);
-    for (i = 0; i < INV_SIZE; i++)
-        fprintf(f, "  Слот %d: %s\n", i, item_names[inventory[i]]);
-    fprintf(f, "\n");
-    fclose(f);
-    printf("Записано в diary.txt.\n");
-}
-
-
-void decode_records(void) {
-    char pname[MAX_PRICES][MAX_NAME];
-    int  pprice[MAX_PRICES];
-    int  count, i, j, price, total, best, best_slot;
-    char line[LINE_SIZE];
-    char *sp;
-    char *nm;
-    size_t len;
-    FILE *in;
-    FILE *out;
-
-    count = 0;
-    in = fopen("data/input.txt", "r");
-    if (!in) { printf("input.txt не найден.\n"); return; }
-
-    while (fgets(line, sizeof(line), in) && count < MAX_PRICES) {
-        len = strlen(line);
-        if (len > 0 && line[len - 1] == '\n') line[len - 1] = '\0';
-        if (len == 0) continue;
-
-        sp = strrchr(line, ' ');
-        if (!sp) continue;
-        *sp = '\0';
-        strncpy(pname[count], line, MAX_NAME - 1);
-        pname[count][MAX_NAME - 1] = '\0';
-        pprice[count] = atoi(sp + 1);
-        count++;
-    }
-    fclose(in);
-
-    if (count == 0) { printf("Прайс пуст.\n"); 
-        return; }
-
-    out = fopen("data/output.txt", "w");
-    if (!out) { printf("Не создать output.txt.\n"); 
-        return; }
-
-    fprintf(out, "--- Прайс: %s ---\n", farmer_name);
-    fprintf(out, "День %d, %02d:00\n\n", current_day, current_hour);
-    printf("--- Прайс: %s ---\n", farmer_name);
-    printf("День %d, %02d:00\n\n", current_day, current_hour);
-
-    total = 0;
-    best = -1;
-    best_slot = -1;
-
-    for (i = 0; i < INV_SIZE; i++) {
-        if (inventory[i] == 0) continue;
-        nm = item_names[inventory[i]];
-
-        price = 0;
-        for (j = 0; j < count; j++)
-            if (strcmp(pname[j], nm) == 0) { price = pprice[j]; break; }
-
-        fprintf(out, "Слот %d: %-16s — %d\n", i, nm, price);
-        printf ("Слот %d: %-16s — %d\n", i, nm, price);
-
-        total += price;
-        if (price > best) { best = price; best_slot = i; }
-    }
-
-    if (best_slot == -1) {
-        fprintf(out, "\nСамый дорогой: (нет)\n");
-        printf ("\nСамый дорогой: (нет)\n");
-    } else {
-        fprintf(out, "\nСамый дорогой: %s (%d)\n", item_names[inventory[best_slot]], best);
-        printf ("\nСамый дорогой: %s (%d)\n", item_names[inventory[best_slot]], best);
-    }
-    fprintf(out, "Итог: %d\n", total);
-    printf ("Итог: %d\n", total);
-
-    fclose(out);
-    printf("\nСохранено в output.txt.\n");
-}
-
-
-
-
-void adventure(void) {
-    char dir;
-    int result;
-
-    tower_level = 1;
-    steps_count = 0;
-    if (!generate_tower()) return;
-
-    printf("\n%s входит в Зеркальную башню!\n", farmer_name);
-    printf("Вторая половина комнаты отражается в зеркале (%c) и закрыта. Дойдите до рычага (%c), чтобы открыть проход.\n", CELL_MIRROR, CELL_LEVER);
-
-    while (1) {
-        print_map();
-        dir = read_direction();
-        if (dir == 'Q') {
-            printf("%s сбежал домой. Шагов сделано: %d\n", farmer_name, steps_count);
-            break;
-        }
-        result = move_hero(dir);
-        if (result == 1) {
-            printf("Вы нашли выход! Переход на следующий этаж башни...\n");
-            free_map();
-            tower_level++;
-            if (!generate_tower()) return;
-        }
-    }
-
-    free_map();
-}
-
-
-int create_map(int w, int h) {
-    int i, j;
-
-    map = (char**)malloc(h * sizeof(char*));
-    if (map == NULL) {
-        printf("Ошибка: не хватает памяти!\n");
+static int require_player(const struct Game *game) {
+    if (game->player == NULL) {
+        printf("Сначала создайте персонажа (пункт 1).\n");
         return 0;
     }
-    alloc_count++;
-
-    for (i = 0; i < h; i++) {
-        map[i] = (char*)malloc(w * sizeof(char));
-        if (map[i] == NULL) {
-            printf("Ошибка: не хватает памяти!\n");
-            for (j = 0; j < i; j++) {
-                free(map[j]);
-                alloc_count--;
-            }
-            free(map);
-            alloc_count--;
-            map = NULL;
-            return 0;
-        }
-        alloc_count++;
-    }
-
-    map_w = w;
-    map_h = h;
     return 1;
 }
 
 
-void free_map(void) {
-    int i;
+static void create_character(struct Game *game) {
+    struct Player *fresh;
 
-    if (map == NULL) return;
-
-    for (i = 0; i < map_h; i++) {
-        free(map[i]);
-        alloc_count--;
-    }
-    free(map);
-    alloc_count--;
-    map = NULL;
-
-    printf("[Память карты %dx%d освобождена, неосвобождённых блоков: %d]\n",
-           map_w, map_h, alloc_count);
-    map_w = 0;
-    map_h = 0;
-}
-
-
-int random_range(int a, int b) {
-    return a + rand() % (b - a + 1);
-}
-
-
-void fill_map(void) {
-    int x, y, chance;
-
-    chance = random_range(OBST_MIN, OBST_MAX);
-
-    for (y = 0; y < map_h; y++) {
-        for (x = 0; x < map_w; x++) {
-            if (x == 0 || y == 0 || x == map_w - 1 || y == map_h - 1) {
-                map[y][x] = CELL_WALL;
-            } else if (x == map_mid) {
-                map[y][x] = CELL_MIRROR;
-            } else if (x < map_mid && rand() % PERCENT < chance) {
-                if (rand() % 2 == 0) map[y][x] = CELL_TREE;
-                else map[y][x] = CELL_ROCK;
-            } else {
-                map[y][x] = CELL_FLOOR;
-            }
+    if (game->player != NULL) {
+        printf("Персонаж %s уже существует.\n", game->player->name);
+        if (!ask_yes_no("Точно удалить его и создать нового?")) {
+            printf("Оставляем старого персонажа.\n");
+            return;
         }
+        player_free(&game->player);
     }
+
+    fresh = player_create();
+    if (fresh == NULL) return;
+    game->player = fresh;
 }
 
 
-void carve_path(int x1, int y1, int x2, int y2) {
-    int x = x1;
-    int y = y1;
-
-    map[y][x] = CELL_FLOOR;
-    while (x != x2) {
-        if (x < x2) x++;
-        else x--;
-        map[y][x] = CELL_FLOOR;
-    }
-    while (y != y2) {
-        if (y < y2) y++;
-        else y--;
-        map[y][x] = CELL_FLOOR;
-    }
+static void show_card(struct Game *game) {
+    if (!require_player(game)) return;
+    player_print_card(game->player, &game->time, game->item_names);
 }
 
 
-void mirror_map(void) {
-    int x, y;
-
-    for (y = 1; y < map_h - 1; y++) {
-        for (x = 1; x < map_mid; x++) {
-            map[y][map_w - 1 - x] = map[y][x];
-        }
-    }
+static void sleep_at_home(struct Game *game) {
+    if (!require_player(game)) return;
+    player_rest(game->player, &game->time);
 }
 
 
-int generate_tower(void) {
-    int w, h;
-    int lever_x, lever_y;
-
-    w = random_range(MAP_MIN, MAP_MAX);
-    h = random_range(MAP_MIN, MAP_MAX);
-    if (w % 2 == 0) w--;
-
-    if (!create_map(w, h)) return 0;
-
-    map_mid = w / 2;
-    room_open = 0;
-    fill_map();
-
-    hero_x = random_range(1, map_mid - 1);
-    hero_y = random_range(1, map_h - 2);
-
-    do {
-        lever_x = random_range(1, map_mid - 1);
-        lever_y = random_range(1, map_h - 2);
-    } while (lever_x == hero_x && lever_y == hero_y);
-
-    carve_path(hero_x, hero_y, lever_x, lever_y);
-    carve_path(lever_x, lever_y, map_mid - 1, lever_y);
-
-    mirror_map();
-
-    map[lever_y][lever_x] = CELL_LEVER;
-    map[hero_y][map_w - 1 - hero_x] = CELL_EXIT;
-
-    printf("\n[Выделена память под карту %dx%d, блоков: %d]\n", map_w, map_h, alloc_count);
-    return 1;
+static void print_time_menu(void) {
+    printf("\n--- Время ---\n");
+    printf("1) Посмотреть на часы\n");
+    printf("2) Ждать\n");
+    printf("3) Лечь спать\n");
+    printf("0) Назад\n");
+    printf("Выбор: ");
 }
 
 
-char cell_to_draw(int x, int y) {
-    int mirror_x;
-
-    if (x == hero_x && y == hero_y) return CELL_HERO;
-    if (!room_open && x > map_mid) {
-        mirror_x = map_w - 1 - x;
-        if (mirror_x == hero_x && y == hero_y) return CELL_HERO;
-        if (map[y][mirror_x] == CELL_LEVER) return CELL_LEVER;
-    }
-    return map[y][x];
-}
-
-
-void print_map(void) {
-    int x, y;
-
-    printf("\n=== Зеркальная башня, этаж %d (%dx%d) ===\n", tower_level, map_w, map_h);
-    for (y = 0; y < map_h; y++) {
-        for (x = 0; x < map_w; x++) printf("%c", cell_to_draw(x, y));
-        printf("\n");
-    }
-    printf("%c-герой %c-стена %c-зеркало %c-дерево %c-камень %c-рычаг %c-выход\n",
-           CELL_HERO, CELL_WALL, CELL_MIRROR, CELL_TREE, CELL_ROCK, CELL_LEVER, CELL_EXIT);
-    if (!room_open) printf("За зеркалом - отражение героя и рычага.\n");
-    else printf("Зеркало исчезло! Идите к выходу.\n");
-}
-
-
-char read_direction(void) {
-    char buf[INPUT_SIZE];
-    char c;
+static void time_menu(struct Game *game) {
+    int choice, status;
 
     while (1) {
-        printf("Куда идти? (W-вверх, A-влево, S-вниз, D-вправо, Q-домой): ");
-        read_line(buf, sizeof(buf));
-        if (strlen(buf) != 1) {
-            printf("Введите одну латинскую букву!\n");
+        print_time_menu();
+        status = read_int(&choice);
+        if (status == INPUT_EOF) return;
+        if (status != INPUT_OK) continue;
+
+        switch (choice) {
+            case TIME_BACK: return;
+            case TIME_CLOCK: time_show(&game->time); break;
+            case TIME_WAIT: time_wait(&game->time); break;
+            case TIME_SLEEP: sleep_at_home(game); break;
+            default: printf("Нет такого пункта.\n"); break;
+        }
+    }
+}
+
+
+static void handle_player_action(struct Game *game, int choice) {
+    struct Player *p = game->player;
+    char (*names)[MAX_NAME] = game->item_names;
+
+    if (!require_player(game)) return;
+
+    switch (choice) {
+        case MENU_INVENTORY: inventory_show(p, names); break;
+        case MENU_PUT: inventory_put(p, names); break;
+        case MENU_DROP: inventory_drop(p); break;
+        case MENU_QUICK: inventory_quick(p, names); break;
+        case MENU_FIND: inventory_find(p, names); break;
+        case MENU_DIARY: diary_write(p, &game->time, names); break;
+        case MENU_ADVENTURE: adventure_run(p, &game->time); break;
+        case MENU_PRICES: price_report(p, &game->time, names); break;
+        case MENU_EQUIPMENT: equipment_menu(p, game->catalog); break;
+        default: break;
+    }
+}
+
+
+static void handle_choice(struct Game *game, int choice) {
+    switch (choice) {
+        case MENU_EXIT:
+            printf("Пока!\n");
+            break;
+        case MENU_CREATE:
+            create_character(game);
+            break;
+        case MENU_CARD:
+            show_card(game);
+            break;
+        case MENU_TIME:
+            time_menu(game);
+            break;
+        case MENU_INVENTORY:
+        case MENU_PUT:
+        case MENU_DROP:
+        case MENU_QUICK:
+        case MENU_FIND:
+        case MENU_DIARY:
+        case MENU_ADVENTURE:
+        case MENU_PRICES:
+        case MENU_EQUIPMENT:
+            handle_player_action(game, choice);
+            break;
+        default:
+            printf("Нет такой команды.\n");
+            break;
+    }
+}
+
+
+int main(void) {
+    struct Game game;
+    int choice = -1;
+    int status;
+
+    SetConsoleOutputCP(65001);
+    SetConsoleCP(65001);
+    srand((unsigned)time(NULL));
+
+    game_init(&game);
+
+    while (choice != MENU_EXIT) {
+        print_menu(&game);
+        status = read_int(&choice);
+        if (status == INPUT_EOF) break;
+        if (status != INPUT_OK) {
+            choice = -1;
             continue;
         }
-        c = buf[0];
-        if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
-        if (c == 'W' || c == 'A' || c == 'S' || c == 'D' || c == 'Q') return c;
-        printf("Нет такого направления!\n");
-    }
-}
-
-
-int is_passable(int x, int y) {
-    char c;
-
-    if (x < 0 || y < 0 || x >= map_w || y >= map_h) return 0;
-    c = map[y][x];
-    if (c == CELL_FLOOR || c == CELL_LEVER || c == CELL_EXIT) return 1;
-    return 0;
-}
-
-
-void open_mirror(void) {
-    int y;
-
-    for (y = 1; y < map_h - 1; y++) map[y][map_mid] = CELL_FLOOR;
-    room_open = 1;
-}
-
-
-int move_hero(char dir) {
-    int nx = hero_x;
-    int ny = hero_y;
-
-    if (dir == 'W') ny--;
-    else if (dir == 'S') ny++;
-    else if (dir == 'A') nx--;
-    else if (dir == 'D') nx++;
-
-    if (map[ny][nx] == CELL_MIRROR) {
-        printf("Это зеркало, сквозь него не пройти. Найдите рычаг!\n");
-        return 0;
-    }
-    if (!is_passable(nx, ny)) {
-        printf("Туда нельзя, там препятствие!\n");
-        return 0;
+        handle_choice(&game, choice);
     }
 
-    hero_x = nx;
-    hero_y = ny;
-    steps_count++;
-
-    if (map[ny][nx] == CELL_LEVER) {
-        printf("Щёлк! Вы дёрнули рычаг - зеркало исчезло, проход во вторую половину открыт!\n");
-        map[ny][nx] = CELL_FLOOR;
-        open_mirror();
-    } else if (map[ny][nx] == CELL_EXIT) {
-        return 1;
-    }
+    game_cleanup(&game);
     return 0;
 }

@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include "utils.h"
 #include "player.h"
 #include "adventure.h"
+
+#define CODEPAGE_UTF8  65001
 
 enum MenuItem {
     MENU_EXIT = 0,
@@ -35,6 +39,14 @@ struct Game {
     char item_names[MAX_ITEMS][MAX_NAME];
     struct Equipment catalog[EQUIP_CATALOG_SIZE];
 };
+
+
+static void setup_console(void) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CODEPAGE_UTF8);
+    SetConsoleCP(CODEPAGE_UTF8);
+#endif
+}
 
 
 static void game_init(struct Game *game) {
@@ -197,8 +209,7 @@ int main(void) {
     int choice = -1;
     int status;
 
-    SetConsoleOutputCP(65001);
-    SetConsoleCP(65001);
+    setup_console();
     srand((unsigned)time(NULL));
 
     game_init(&game);

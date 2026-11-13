@@ -144,7 +144,7 @@ void load_items(void) {
     size_t len;
     int i;
 
-    f = fopen("items.txt", "r");
+    f = fopen("data/items.txt", "r");
     if (!f) {
         printf("items.txt не найден — используются базовые названия.\n");
         return;
@@ -280,7 +280,7 @@ void write_diary(void) {
     FILE *f;
     int i;
 
-    f = fopen("diary.txt", "a");
+    f = fopen("data/diary.txt", "a");
     if (!f) { printf("Не удалось открыть diary.txt.\n"); return; }
     fprintf(f, "Фермер: %s | День %d, %02d:00\n", farmer_name, current_day, current_hour);
     for (i = 0; i < INV_SIZE; i++)
@@ -303,7 +303,7 @@ void decode_records(void) {
     FILE *out;
 
     count = 0;
-    in = fopen("input.txt", "r");
+    in = fopen("data/input.txt", "r");
     if (!in) { printf("input.txt не найден.\n"); return; }
 
     while (fgets(line, sizeof(line), in) && count < MAX_PRICES) {
@@ -324,7 +324,7 @@ void decode_records(void) {
     if (count == 0) { printf("Прайс пуст.\n"); 
         return; }
 
-    out = fopen("output.txt", "w");
+    out = fopen("data/output.txt", "w");
     if (!out) { printf("Не создать output.txt.\n"); 
         return; }
 

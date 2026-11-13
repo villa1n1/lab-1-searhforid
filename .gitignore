@@ -12,4 +12,5 @@ diary.txt
 
 # Системный мусор (macOS/Windows)
 .DS_Store
-Thumbs.db
+Thumbs.db*.out
+.vs/

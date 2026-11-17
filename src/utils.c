@@ -1,9 +1,11 @@
+// utils.c - ввод с проверкой, работа с файлами и игровое время
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "utils.h"
 
 
+// Если пользователь ввёл слишком длинную строку, выбрасываем остаток, чтобы он не попал в следующий ввод
 static void discard_rest_of_line(const char *buf) {
     int c;
 
@@ -13,6 +15,7 @@ static void discard_rest_of_line(const char *buf) {
 }
 
 
+// Читаем целое число из строки (мусор после числа не принимаем)
 int read_int(int *out) {
     char buf[INPUT_SIZE];
     char rest;
@@ -27,6 +30,7 @@ int read_int(int *out) {
 }
 
 
+// Читаем число и проверяем, что оно в диапазоне от min до max
 int read_int_range(const char *prompt, int min, int max, int *out) {
     int status;
 
@@ -41,6 +45,7 @@ int read_int_range(const char *prompt, int min, int max, int *out) {
 }
 
 
+// Читаем строку без символа переноса в конце
 int read_line(char *out, int size) {
     size_t len;
 
@@ -55,6 +60,7 @@ int read_line(char *out, int size) {
 }
 
 
+// Задаём вопрос и ждём ответ да или нет
 int ask_yes_no(const char *question) {
     char buf[INPUT_SIZE];
 
@@ -70,27 +76,32 @@ int ask_yes_no(const char *question) {
 }
 
 
+// Случайное число от a до b включительно
 int random_range(int a, int b) {
     return a + rand() % (b - a + 1);
 }
 
 
+// Начало игры: день 1, 08:00
 void time_init(struct GameTime *t) {
     t->day = 1;
     t->hour = START_HOUR;
 }
 
 
+// Час на часах (после полуночи счёт идёт с 0)
 int time_clock_hour(const struct GameTime *t) {
     return t->hour % HOURS_IN_DAY;
 }
 
 
+// Печатаем день и время
 void time_show(const struct GameTime *t) {
     printf("День %d, %02d:00\n", t->day, time_clock_hour(t));
 }
 
 
+// Сколько часов осталось до 02:00 ночи
 int time_hours_left(const struct GameTime *t) {
     int left = DEADLINE_HOUR - t->hour;
 
@@ -99,22 +110,26 @@ int time_hours_left(const struct GameTime *t) {
 }
 
 
+// Уже ночь (02:00 и позже)?
 int time_is_night(const struct GameTime *t) {
     return t->hour >= DEADLINE_HOUR;
 }
 
 
+// Прибавляем часы
 void time_add_hours(struct GameTime *t, int hours) {
     t->hour += hours;
 }
 
 
+// Новый день, утро в 08:00
 void time_next_morning(struct GameTime *t) {
     t->day++;
     t->hour = START_HOUR;
 }
 
 
+// Ждать: можно промотать время, но не дальше 02:00
 void time_wait(struct GameTime *t) {
     int left = time_hours_left(t);
     int hours;
@@ -131,6 +146,7 @@ void time_wait(struct GameTime *t) {
 }
 
 
+// Названия предметов по умолчанию, если нет файла
 void set_default_item_names(char names[][MAX_NAME]) {
     const char *defaults[MAX_ITEMS] = {
         "Пусто", "Дерево", "Камень", "Семена",
@@ -146,6 +162,7 @@ void set_default_item_names(char names[][MAX_NAME]) {
 }
 
 
+// Загружаем названия предметов из файла (если файла нет - остаются по умолчанию)
 void load_item_names(char names[][MAX_NAME]) {
     FILE *f;
     char line[INPUT_SIZE];
@@ -176,6 +193,7 @@ void load_item_names(char names[][MAX_NAME]) {
 }
 
 
+// Читаем прайс-лист из файла, возвращаем количество записей (-1 если файла нет)
 int load_prices(char names[][MAX_NAME], int prices[], int max) {
     FILE *f;
     char line[LINE_SIZE];
@@ -207,6 +225,7 @@ int load_prices(char names[][MAX_NAME], int prices[], int max) {
 }
 
 
+// Открываем файл и сообщаем, если не получилось
 FILE *open_file(const char *path, const char *mode) {
     FILE *f = fopen(path, mode);
 

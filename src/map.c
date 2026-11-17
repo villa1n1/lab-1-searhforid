@@ -1,9 +1,11 @@
+// map.c - карта этажа в динамической памяти, зеркальная комната и движение
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "map.h"
 
 
+// Выделяем память под двумерный массив клеток: сначала строки-указатели, потом сами строки
 static int allocate_cells(struct Map *map, int w, int h) {
     int i, j;
 
@@ -23,6 +25,7 @@ static int allocate_cells(struct Map *map, int w, int h) {
 }
 
 
+// Заполняем карту: стены по краям, зеркало посередине, препятствия слева
 static void fill_map(struct Map *map) {
     int x, y, chance;
 
@@ -45,6 +48,7 @@ static void fill_map(struct Map *map) {
 }
 
 
+// Прокладываем проход от одной клетки к другой, чтобы до цели можно было дойти
 static void carve_path(struct Map *map, int x1, int y1, int x2, int y2) {
     int x = x1;
     int y = y1;
@@ -63,6 +67,7 @@ static void carve_path(struct Map *map, int x1, int y1, int x2, int y2) {
 }
 
 
+// Копируем левую половину в правую зеркально
 static void mirror_left_half(struct Map *map) {
     int x, y;
 
@@ -74,6 +79,7 @@ static void mirror_left_half(struct Map *map) {
 }
 
 
+// Ставим героя, рычаг и выход, и делаем проходы между ними
 static void place_objects(struct Map *map, struct Player *player) {
     int lever_x, lever_y;
 
@@ -95,6 +101,7 @@ static void place_objects(struct Map *map, struct Player *player) {
 }
 
 
+// Создаём новую карту (структуру и массив) для этажа floor
 struct Map *map_create(int floor, struct Player *player) {
     struct Map *map;
     int w, h;
@@ -107,6 +114,7 @@ struct Map *map_create(int floor, struct Player *player) {
 
     w = random_range(MAP_MIN, MAP_MAX);
     h = random_range(MAP_MIN, MAP_MAX);
+    // ширина нечётная, чтобы зеркало встало строго посередине
     if (w % 2 == 0) w--;
 
     if (!allocate_cells(map, w, h)) {
@@ -118,6 +126,7 @@ struct Map *map_create(int floor, struct Player *player) {
     map->width = w;
     map->height = h;
     map->floor = floor;
+    // номер столбца, где стоит зеркало
     map->mirror_x = w / 2;
     map->mirror_open = 0;
 
@@ -129,12 +138,15 @@ struct Map *map_create(int floor, struct Player *player) {
 }
 
 
+// Освобождаем память карты: сначала строки, потом массив указателей, потом структуру
 void map_free(struct Map **map) {
     int i;
 
     if (map == NULL || *map == NULL) return;
 
+    // сначала освобождаем каждую строку
     for (i = 0; i < (*map)->height; i++) free((*map)->cells[i]);
+    // потом массив указателей на строки
     free((*map)->cells);
 
     printf("Память структуры по адресу %p освобождена\n", (void*)*map);
@@ -143,6 +155,7 @@ void map_free(struct Map **map) {
 }
 
 
+// Какой символ рисовать в клетке: пока зеркало закрыто, справа показываем отражения героя и рычага
 static char cell_to_draw(const struct Map *map, const struct Player *player, int x, int y) {
     int mirror_pos;
 
@@ -156,6 +169,7 @@ static char cell_to_draw(const struct Map *map, const struct Player *player, int
 }
 
 
+// Рисуем карту на экране
 void map_print(const struct Map *map, const struct Player *player) {
     int x, y;
 
@@ -171,6 +185,7 @@ void map_print(const struct Map *map, const struct Player *player) {
 }
 
 
+// Читаем клавишу движения W/A/S/D или Q
 enum Direction read_direction(void) {
     char buf[INPUT_SIZE];
     char c;
@@ -194,6 +209,7 @@ enum Direction read_direction(void) {
 }
 
 
+// Можно ли встать на клетку (пол, рычаг или выход)
 static int is_passable(const struct Map *map, int x, int y) {
     char c;
 
@@ -203,6 +219,7 @@ static int is_passable(const struct Map *map, int x, int y) {
 }
 
 
+// Рычаг сработал: убираем зеркало посередине
 static void open_mirror(struct Map *map) {
     int y;
 
@@ -211,6 +228,7 @@ static void open_mirror(struct Map *map) {
 }
 
 
+// Пробуем сделать шаг: проверяем зеркало и препятствия, срабатывают рычаг и выход
 enum MoveResult map_move(struct Map *map, struct Player *player, enum Direction dir) {
     int nx = player->x;
     int ny = player->y;

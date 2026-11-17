@@ -1,7 +1,9 @@
+// adventure.c - поход героя по башне
 #include <stdio.h>
 #include "adventure.h"
 
 
+// Проверяем, можно ли идти в поход: нужны силы и время не должно быть ночью
 static int can_start(const struct Player *player, const struct GameTime *time) {
     if (player->stamina <= 0) {
         printf("У героя нет сил для похода. Сначала нужно отдохнуть.\n");
@@ -15,6 +17,7 @@ static int can_start(const struct Player *player, const struct GameTime *time) {
 }
 
 
+// Герой потерял сознание: спасатели забирают половину золота
 static void faint(struct Player *player) {
     int fee = player->gold / FAINT_GOLD_DIVIDER;
 
@@ -24,6 +27,7 @@ static void faint(struct Player *player) {
 }
 
 
+// Переход на новый этаж: награда, трата сил и времени, старая карта освобождается
 static struct Map *next_floor(struct Map *map, struct Player *player, struct GameTime *time) {
     int reward = GOLD_PER_FLOOR * map->floor;
     int next_number = map->floor + 1;
@@ -39,11 +43,13 @@ static struct Map *next_floor(struct Map *map, struct Player *player, struct Gam
 }
 
 
+// Герой выдохся, если нет сил или уже 02:00 ночи
 static int hero_is_exhausted(const struct Player *player, const struct GameTime *time) {
     return player->stamina <= 0 || time_is_night(time);
 }
 
 
+// Главный цикл похода: рисуем карту, читаем направление, двигаем героя
 void adventure_run(struct Player *player, struct GameTime *time) {
     struct Map *map;
     enum Direction dir;
@@ -70,9 +76,11 @@ void adventure_run(struct Player *player, struct GameTime *time) {
         }
 
         result = map_move(map, player, dir);
+        // упёрлись в препятствие - шаг не засчитываем
         if (result == MOVE_BLOCKED) continue;
 
         steps++;
+        // каждый успешный шаг тратит выносливость
         player_spend_stamina(player, STEP_COST);
 
         if (result == MOVE_EXIT) {
@@ -87,6 +95,7 @@ void adventure_run(struct Player *player, struct GameTime *time) {
         }
     }
 
+    // при обмороке забираем плату, а память карты освобождаем в любом случае
     if (fainted) faint(player);
     map_free(&map);
 }

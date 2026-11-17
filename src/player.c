@@ -1,9 +1,11 @@
+// player.c - герой: характеристики, инвентарь и снаряжение
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "player.h"
 
 
+// Очищаем слот снаряжения
 static void clear_slot(struct Player *p, int slot) {
     p->equipment[slot].name[0] = '\0';
     p->equipment[slot].slot = (enum SlotType)slot;
@@ -12,6 +14,7 @@ static void clear_slot(struct Player *p, int slot) {
 }
 
 
+// Название слота снаряжения для вывода на экран
 static const char *slot_title(enum SlotType slot) {
     switch (slot) {
         case SLOT_HEAD:  return "Голова";
@@ -22,11 +25,13 @@ static const char *slot_title(enum SlotType slot) {
 }
 
 
+// Печатаем название вещи и её бонусы
 static void print_equipment_line(const struct Equipment *e) {
     printf("%s +%d HP, +%d выносливости", e->name, e->bonus_hp, e->bonus_stamina);
 }
 
 
+// Печатаем все слоты снаряжения героя
 static void print_slots(const struct Player *p) {
     int i;
 
@@ -40,6 +45,7 @@ static void print_slots(const struct Player *p) {
 }
 
 
+// Спрашиваем имя героя (пустое - имя по умолчанию, слишком длинное - спрашиваем снова)
 static int ask_player_name(char *out) {
     char buf[INPUT_SIZE];
 
@@ -60,10 +66,12 @@ static int ask_player_name(char *out) {
 }
 
 
+// Создаём героя в динамической памяти и задаём стартовые характеристики
 struct Player *player_create(void) {
     struct Player *p;
     int i;
 
+    // выделяем память под структуру героя
     p = (struct Player*)malloc(sizeof(struct Player));
     if (p == NULL) {
         printf("Ошибка: не хватает памяти!\n");
@@ -92,6 +100,7 @@ struct Player *player_create(void) {
 }
 
 
+// Освобождаем память героя и обнуляем указатель
 void player_free(struct Player **player) {
     if (player == NULL || *player == NULL) return;
 
@@ -101,6 +110,7 @@ void player_free(struct Player **player) {
 }
 
 
+// Карточка героя: характеристики, время, снаряжение и инвентарь
 void player_print_card(const struct Player *p, const struct GameTime *t, char names[][MAX_NAME]) {
     printf("\n===== Карточка персонажа =====\n");
     printf("Имя: %s\n", p->name);
@@ -113,12 +123,14 @@ void player_print_card(const struct Player *p, const struct GameTime *t, char na
 }
 
 
+// Строка состояния (HUD) во время похода
 void player_print_hud(const struct Player *p, int floor, const struct GameTime *t) {
     printf("HP: %d/%d | Выносливость: %d/%d | Золото: %d | Этаж: %d | Время: %02d:00\n",
            p->hp, p->max_hp, p->stamina, p->max_stamina, p->gold, floor, time_clock_hour(t));
 }
 
 
+// Сон: следующий день, утро, здоровье и выносливость на максимум
 void player_rest(struct Player *p, struct GameTime *t) {
     time_next_morning(t);
     p->hp = p->max_hp;
@@ -128,12 +140,14 @@ void player_rest(struct Player *p, struct GameTime *t) {
 }
 
 
+// Тратим выносливость, но не уходим ниже нуля
 void player_spend_stamina(struct Player *p, int amount) {
     p->stamina -= amount;
     if (p->stamina < 0) p->stamina = 0;
 }
 
 
+// Пересчитываем максимумы: базовое значение плюс бонусы всей экипировки
 void player_recalc_stats(struct Player *p) {
     int i;
 
@@ -148,6 +162,7 @@ void player_recalc_stats(struct Player *p) {
 }
 
 
+// Заполняем одну вещь в каталоге
 static void set_equipment(struct Equipment *e, const char *name, enum SlotType slot, int bonus_hp, int bonus_stamina) {
     strncpy(e->name, name, MAX_NAME - 1);
     e->name[MAX_NAME - 1] = '\0';
@@ -157,6 +172,7 @@ static void set_equipment(struct Equipment *e, const char *name, enum SlotType s
 }
 
 
+// Каталог вещей, которые можно надеть
 void equipment_fill_catalog(struct Equipment catalog[]) {
     set_equipment(&catalog[0], "Кожаная шапка", SLOT_HEAD, 5, 0);
     set_equipment(&catalog[1], "Железный шлем", SLOT_HEAD, 15, 0);
@@ -167,6 +183,7 @@ void equipment_fill_catalog(struct Equipment catalog[]) {
 }
 
 
+// Надеть вещь из каталога в её слот (старая вещь в этом слоте заменяется)
 static void equip_item(struct Player *p, const struct Equipment catalog[]) {
     int i, choice;
     char prompt[INPUT_SIZE];
@@ -187,6 +204,7 @@ static void equip_item(struct Player *p, const struct Equipment catalog[]) {
 }
 
 
+// Снять вещь из выбранного слота
 static void unequip_item(struct Player *p) {
     int choice;
     char prompt[INPUT_SIZE];
@@ -205,6 +223,7 @@ static void unequip_item(struct Player *p) {
 }
 
 
+// Меню управления снаряжением
 void equipment_menu(struct Player *p, const struct Equipment catalog[]) {
     int choice, status;
 
@@ -224,6 +243,7 @@ void equipment_menu(struct Player *p, const struct Equipment catalog[]) {
 }
 
 
+// Показать инвентарь
 void inventory_show(const struct Player *p, char names[][MAX_NAME]) {
     int i;
 
@@ -233,6 +253,7 @@ void inventory_show(const struct Player *p, char names[][MAX_NAME]) {
 }
 
 
+// Положить предмет в слот
 void inventory_put(struct Player *p, char names[][MAX_NAME]) {
     int idx, id;
     char prompt[INPUT_SIZE];
@@ -247,6 +268,7 @@ void inventory_put(struct Player *p, char names[][MAX_NAME]) {
 }
 
 
+// Выбросить предмет из слота
 void inventory_drop(struct Player *p) {
     int idx;
     char prompt[INPUT_SIZE];
@@ -259,6 +281,7 @@ void inventory_drop(struct Player *p) {
 }
 
 
+// Быстрый доступ: меняем найденный предмет местами с нулевым слотом
 void inventory_quick(struct Player *p, char names[][MAX_NAME]) {
     int id, found, i, t;
     char prompt[INPUT_SIZE];
@@ -281,6 +304,7 @@ void inventory_quick(struct Player *p, char names[][MAX_NAME]) {
 }
 
 
+// Поиск предмета по названию
 void inventory_find(const struct Player *p, char names[][MAX_NAME]) {
     char query[MAX_NAME];
     int id, any, i;
@@ -303,6 +327,7 @@ void inventory_find(const struct Player *p, char names[][MAX_NAME]) {
 }
 
 
+// Дописываем состояние героя в дневник
 void diary_write(const struct Player *p, const struct GameTime *t, char names[][MAX_NAME]) {
     FILE *f;
     int i;
@@ -319,6 +344,7 @@ void diary_write(const struct Player *p, const struct GameTime *t, char names[][
 }
 
 
+// Оценка инвентаря по прайс-листу, отчёт пишем в output.txt
 void price_report(const struct Player *p, const struct GameTime *t, char names[][MAX_NAME]) {
     char pname[MAX_PRICES][MAX_NAME];
     int pprice[MAX_PRICES];

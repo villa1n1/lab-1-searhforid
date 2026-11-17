@@ -1,3 +1,4 @@
+// main.c - точка входа и главное меню
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -33,6 +34,7 @@ enum TimeMenuItem {
     TIME_SLEEP
 };
 
+// всё состояние игры хранится здесь, глобальных переменных нет
 struct Game {
     struct GameTime time;
     struct Player *player;
@@ -41,6 +43,7 @@ struct Game {
 };
 
 
+// Включаем русский язык в консоли (только для Windows)
 static void setup_console(void) {
 #ifdef _WIN32
     SetConsoleOutputCP(CODEPAGE_UTF8);
@@ -49,6 +52,7 @@ static void setup_console(void) {
 }
 
 
+// Начальные значения: время, пустой указатель на героя, каталоги предметов
 static void game_init(struct Game *game) {
     time_init(&game->time);
     game->player = NULL;
@@ -57,11 +61,13 @@ static void game_init(struct Game *game) {
 }
 
 
+// Перед выходом освобождаем память героя
 static void game_cleanup(struct Game *game) {
     player_free(&game->player);
 }
 
 
+// Печатаем главное меню
 static void print_menu(const struct Game *game) {
     if (game->player != NULL) printf("\n=== МЕНЮ: %s ===\n", game->player->name);
     else printf("\n=== МЕНЮ: персонаж не создан ===\n");
@@ -82,6 +88,7 @@ static void print_menu(const struct Game *game) {
 }
 
 
+// Проверка, что персонаж создан (иначе большинство пунктов недоступны)
 static int require_player(const struct Game *game) {
     if (game->player == NULL) {
         printf("Сначала создайте персонажа (пункт 1).\n");
@@ -91,6 +98,7 @@ static int require_player(const struct Game *game) {
 }
 
 
+// Пункт 1: создать героя. Если он уже есть - спрашиваем и освобождаем старого
 static void create_character(struct Game *game) {
     struct Player *fresh;
 
@@ -109,18 +117,21 @@ static void create_character(struct Game *game) {
 }
 
 
+// Пункт 2: карточка персонажа
 static void show_card(struct Game *game) {
     if (!require_player(game)) return;
     player_print_card(game->player, &game->time, game->item_names);
 }
 
 
+// Лечь спать: утро следующего дня и полное восстановление сил
 static void sleep_at_home(struct Game *game) {
     if (!require_player(game)) return;
     player_rest(game->player, &game->time);
 }
 
 
+// Печатаем подменю времени
 static void print_time_menu(void) {
     printf("\n--- Время ---\n");
     printf("1) Посмотреть на часы\n");
@@ -131,6 +142,7 @@ static void print_time_menu(void) {
 }
 
 
+// Подменю времени: часы, ждать, спать
 static void time_menu(struct Game *game) {
     int choice, status;
 
@@ -151,6 +163,7 @@ static void time_menu(struct Game *game) {
 }
 
 
+// Пункты меню, которым нужен персонаж
 static void handle_player_action(struct Game *game, int choice) {
     struct Player *p = game->player;
     char (*names)[MAX_NAME] = game->item_names;
@@ -172,6 +185,7 @@ static void handle_player_action(struct Game *game, int choice) {
 }
 
 
+// Выбираем действие по номеру пункта меню
 static void handle_choice(struct Game *game, int choice) {
     switch (choice) {
         case MENU_EXIT:
@@ -204,6 +218,7 @@ static void handle_choice(struct Game *game, int choice) {
 }
 
 
+// Точка входа: создаём игру, крутим меню до выхода, очищаем память
 int main(void) {
     struct Game game;
     int choice = -1;

@@ -10,6 +10,7 @@
 #define GOLD_PER_FLOOR     10
 #define FAINT_GOLD_DIVIDER 2
 
+// Главный цикл похода: рисуем карту, читаем направление, двигаем героя
 void adventure_run(struct Player *player, struct GameTime *time);
 
 #endif

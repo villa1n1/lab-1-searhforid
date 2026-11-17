@@ -33,6 +33,7 @@ enum MoveResult {
     MOVE_EXIT
 };
 
+// карта этажа: двумерный динамический массив и номер столбца с зеркалом
 struct Map {
     char **cells;
     int width;
@@ -42,10 +43,15 @@ struct Map {
     int mirror_open;
 };
 
+// Создаём новую карту (структуру и массив) для этажа floor
 struct Map *map_create(int floor, struct Player *player);
+// Освобождаем память карты: сначала строки, потом массив указателей, потом структуру
 void map_free(struct Map **map);
+// Рисуем карту на экране
 void map_print(const struct Map *map, const struct Player *player);
+// Читаем клавишу движения W/A/S/D или Q
 enum Direction read_direction(void);
+// Пробуем сделать шаг: проверяем зеркало и препятствия, срабатывают рычаг и выход
 enum MoveResult map_move(struct Map *map, struct Player *player, enum Direction dir);
 
 #endif
